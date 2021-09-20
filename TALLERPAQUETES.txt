@@ -1,0 +1,128 @@
+--- PAQUETE 
+CREATE OR REPLACE PACKAGE tallerentregable IS
+    TYPE regest IS RECORD (
+        v_nomfac   facultad.nombre%TYPE,
+        v_numprog  NUMBER
+    );
+
+--Cursor
+
+    CURSOR cursrorfac (
+        n NUMBER
+    ) RETURN regest;
+
+--Procedimiento
+
+    PROCEDURE profesinprogramas;
+
+END;
+
+
+--Body
+
+CREATE OR REPLACE PACKAGE BODY tallerentregable AS
+
+    CURSOR cursrorfac (
+        n NUMBER
+    ) RETURN regest IS
+    SELECT
+        nombre,
+        cont
+    FROM
+        (
+            SELECT
+                facultad.nombre                   AS nombre,
+                COUNT(programa.programa_id)       AS cont
+            FROM
+                     facultad
+                JOIN programa ON programa.facultad_id = facultad.facultad_id
+            GROUP BY
+                facultad.nombre
+            ORDER BY
+                COUNT(programa.programa_id) DESC,
+                facultad.nombre
+        )
+    WHERE
+        ROWNUM <= n;
+
+
+
+--Procedimiento
+    PROCEDURE profesinprogramas IS
+        TYPE profesores IS
+            TABLE OF profesor.nombre%TYPE;
+        v_profesores profesores;
+    BEGIN
+        SELECT
+            profesor.nombre
+        BULK COLLECT
+        INTO v_profesores
+        FROM
+                 profesor
+            JOIN facultad ON profesor.facultad_id = facultad.facultad_id
+                             AND facultad.nombre NOT IN (
+                SELECT
+                    facultad.nombre
+                FROM
+                         facultad
+                    JOIN programa ON programa.facultad_id = facultad.facultad_id
+                GROUP BY
+                    facultad.nombre
+                HAVING
+                    COUNT(programa.programa_id) > 0
+            );
+
+        IF v_profesores.count = 0 THEN
+            raise_application_error(-20001, 'No hay registro de profesores que pertenezcan a una facultad sin programas');
+        ELSE
+            FOR i IN 1..v_profesores.count LOOP
+                dbms_output.put_line('Docente:'
+                                     || ' '
+                                     || v_profesores(i));
+            END LOOP;
+        END IF;
+
+    EXCEPTION
+        WHEN no_data_found THEN
+            dbms_output.put_line('Sin información');
+    END;
+
+END;
+
+
+
+
+--------EJECUTABLES  
+
+
+
+--------EJECUTABLES  
+
+
+--Bloque anónimo del cursor
+
+SET SERVEROUTPUT ON;
+
+DECLARE BEGIN
+    FOR v_cursor IN tallerentregable.cursrorfac(&n) LOOP
+        dbms_output.put_line('Facultad:'
+                             || ' '
+                             || v_cursor.v_nomfac
+                             || ' '
+                             || 'Programas:'
+                             || ' '
+                             || v_cursor.v_numprog);
+    END LOOP;
+END;
+
+--Bloque del procedimiento
+
+SET SERVEROUTPUT ON;
+
+DECLARE BEGIN
+    tallerentregable.profesinprogramas;
+END;
+
+
+
+

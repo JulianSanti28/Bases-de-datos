@@ -1,0 +1,111 @@
+
+--Ejercicios
+
+--Crear tabla
+
+CREATE TABLE logCambios (log_id NUMBER PRIMARY KEY, log_tipo varchar2(20),
+                        log_fecha timestamp default Sysdate);
+--Secuencia                      
+CREATE sequence seqLogCambios Increment by 1 start with 1;
+
+--Trigger
+
+
+  CREATE OR REPLACE TRIGGER auditoria_nota_trig1
+            AFTER INSERT OR UPDATE OR DELETE ON nota DECLARE
+    v_tipo VARCHAR2(20) := '';
+            
+            BEGIN IF inserting THEN
+    v_tipo := 'INSERT';
+ELSIF updating THEN
+    v_tipo := 'UPDATE';
+    ELSE
+        v_tipo := 'DELETE';
+       END IF;
+       
+       INSERT INTO logCambios(log_id, log_tipo) VALUES (seqLogCambios.nextval, v_tipo);
+        end;
+
+--2
+
+
+
+--Crear tabla
+CREATE TABLE auditoriaNotas (
+
+aud_id NUMBER PRIMARY KEY,
+aud_operacion varchar2(20),
+aud_idNota NUMBER, aud_codigo NUMBER,
+aud_idAsignatura varchar2(50),
+aud_nota1 NUMBER(4,2), aud_nota2 NUMBER(4,2),
+aud_nota3 NUMBER(4,2),
+aud_fecha TIMESTAMP default sysdate,
+check(aud_operacion IN ('INSERT','BEFORE UPDATE', 'AFTER UPDATE'))
+
+);
+
+
+CREATE SEQUENCE seqAuditoriaNotas INCREMENT BY 1 START WITH 1;
+
+--Trigger
+
+
+
+CREATE OR REPLACE TRIGGER Auditoria_NotaTrig2 
+BEFORE UPDATE OR DELETE ON nota referencing new as new old as old
+FOR EACH ROW
+
+DECLARE
+v_operacion varchar2(50) := '';
+BEGIN
+IF UPDATING THEN
+v_operacion := 'BEFORE UPDATE';
+ELSE
+v_operacion := 'DELETE';
+END IF;
+INSERT INTO auditoriaNotas (aud_id, aud_operacion,aud_idnota
+, aud_codigo, aud_idasignatura, aud_nota1, aud_nota2, aud_nota3)
+
+VALUES (seqAuditoriaNotas.nextval,
+v_operacion, :OLD.idnota, :OLD.codigo, :OLD.IDASIGNATURA,:OLD.nota1, :OLD.nota2, 
+:OLD.nota3);
+END;
+
+--Test
+
+update Nota set nota1=1.5,nota2=1.6,nota3=1
+where idnota=1057;
+
+--3
+
+create or replace 
+trigger Auditoria_NotaTrig3
+after insert or update or delete
+on nota referencing new as new old as old
+for each row
+begin
+  if inserting then 
+       insert into auditorianotas (aud_id, aud_operacion, aud_idNota
+                                            ,aud_codigo, aud_idAsignatura
+                                           ,aud_Nota1, aud_Nota2, aud_Nota3)
+                                 values (seqAuditoriaNotas.nextval, 'INSERT'
+                                         
+  ,:new.idNota, :new.codigo, :new.idAsignatura
+                                           ,:new.nota1, :new.nota2, :new.nota3);
+  elsif updating then 
+                insert into auditorianotas (aud_id, aud_operacion, aud_idNota
+                                                     ,aud_codigo, aud_idAsignatura
+                                                    ,aud_Nota1, aud_Nota2, aud_Nota3)
+                                         values (seqAuditoriaNotas.nextval, 'AFTER UPDATE'
+           
+,:new.idNota, :new.codigo, :new.idAsignatura
+                                                      ,:new.nota1, :new.nota2, :new.nota3);
+  else
+         insert into auditorianotas (aud_id, aud_operacion, aud_idNota
+                                        ,aud_codigo, aud_idAsignatura
+                                        ,aud_Nota1, aud_Nota2, aud_Nota3)
+                           values (seqAuditoriaNotas.nextval, 'DELETE'
+  ,:old.idNota, :old.codigo, :old.idAsignatura
+                                      ,:old.nota1, :old.nota2, :old.nota3);
+  end if;
+end;

@@ -1,0 +1,90 @@
+--JULIÁN SANTIAGO MARTINEZ TRULLO
+--PIS-UDC-2021.1
+
+
+--Alterar tabla
+ALTER TABLE ESTUDIANTE ADD EDAD NUMBER;
+
+--Paquete
+CREATE OR REPLACE PACKAGE pk_infoestudiante1 AS
+--Registro
+    TYPE regest IS RECORD (
+        v_codest estudiante.codigo%TYPE
+    );
+--Variable del registro
+    v_regest regest;
+--Cursor para estudiantes de un programa
+    CURSOR c_estudiantes (
+        prog estudiante.idprograma%TYPE
+    ) RETURN v_regest%TYPE;
+--Recibe como parámetro el codigo del programa
+    PROCEDURE actualizar_edad (
+        prog programa.idprograma%TYPE
+    );
+--Calcula la edad de cada estudiante del programa
+    FUNCTION calcular_edad (
+        estcod estudiante.codigo%TYPE
+    ) RETURN NUMBER;
+
+END;
+
+CREATE OR REPLACE PACKAGE BODY pk_infoestudiante1 AS 
+--Cursor(Retorna los estudiantes de un programa)
+    CURSOR c_estudiantes (
+        prog estudiante.idprograma%TYPE
+    ) RETURN v_regest%TYPE IS
+    SELECT
+        estudiante.codigo
+    FROM
+        estudiante
+    WHERE
+        estudiante.idprograma = prog;
+
+--Funcion (Se recibe el código del estudiante)
+    FUNCTION calcular_edad (
+        estcod estudiante.codigo%TYPE
+    ) RETURN NUMBER IS
+        v_edad estudiante.edad%TYPE;
+    BEGIN
+        SELECT
+            ( EXTRACT(YEAR FROM sysdate) - EXTRACT(YEAR FROM estudiante.fnacimiento) )
+        INTO v_edad
+        FROM
+            estudiante
+        WHERE
+            estudiante.codigo = estcod;
+
+        RETURN v_edad;
+    END;
+
+--Procedimiento
+    PROCEDURE actualizar_edad (
+        prog programa.idprograma%TYPE
+    ) AS 
+---Guarda la edad de cada estudiante devuelta por la función 
+        v_edad estudiante.edad%TYPE;
+    BEGIN
+        OPEN c_estudiantes(prog);
+        LOOP 
+--Capturo cada una de filas por medio del cursor y la guardo en el registro 
+            FETCH c_estudiantes INTO v_regest;
+            EXIT WHEN c_estudiantes%notfound;
+            v_edad := calcular_edad(v_regest.v_codest);
+--Actualizo la edad del estudiante que me interesa
+            UPDATE estudiante
+            SET
+                edad = v_edad
+            WHERE
+                estudiante.codigo = v_regest.v_codest;
+
+        END LOOP;
+               
+        CLOSE c_estudiantes;
+
+    END;
+
+END pk_infoestudiante1;
+
+--Prueba
+
+EXECUTE pk_infoestudiante1.actualizar_edad('pis');

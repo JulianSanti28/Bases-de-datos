@@ -1,0 +1,278 @@
+------------------------------------------------------------------------------------------------------------------------
+/* primer punto */
+------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION infomerevisiones (
+    id_funcionario IN funcionario.idfuncionario%TYPE
+) RETURN NUMBER AS
+    v_numrev  NUMBER := 0;
+    v_cont    NUMBER := 0;
+BEGIN
+    SELECT
+        COUNT(funcionario.idfuncionario)
+    INTO v_cont
+    FROM
+        funcionario
+    WHERE
+        funcionario.idfuncionario = id_funcionario;
+
+    IF v_cont = 0 THEN
+        RAISE no_data_found;
+    ELSE
+        SELECT
+            COUNT(libro.isbn)
+        INTO v_numrev
+        FROM
+                 revision
+            JOIN funcionario ON revision.idfuncionario = funcionario.idfuncionario
+            JOIN libro ON revision.isbn = libro.isbn
+                          AND funcionario.idfuncionario = id_funcionario
+        GROUP BY
+            funcionario.idfuncionario;
+
+        RETURN v_numrev;
+    END IF;
+
+EXCEPTION
+    WHEN no_data_found THEN
+        dbms_output.put_line('NO HAY REGISTROS ASOCIADOS');
+        RETURN NULL;
+END;
+
+--Llamado del método con variable host
+
+SET SERVEROUTPUT ON;
+
+
+VARIABLE numrevisiones NUMBER;
+
+EXECUTE :numrevisiones := infomerevisiones(1234567);
+
+PRINT numrevisiones
+
+
+------------------------------------------------------------------------------------------------------------------------
+/* segundo punto */
+------------------------------------------------------------------------------------------------------------------------
+/* 
+Cree un procedimiento almacenado (funcionarioMayorRevisiones) que permita
+consultar el nombre y apellidos del funcionario que más revisiones ha realizado. Cree un bloque anónimo
+para ejecutar el procedimiento
+*/
+
+
+CREATE OR REPLACE PROCEDURE funcionariomayorrevisiones IS
+    v_nombre    funcionario.nombre%TYPE;
+    v_apellido  funcionario.apellidos%TYPE;
+BEGIN
+    SELECT
+        nombre,
+        apellidos
+    INTO
+        v_nombre,
+        v_apellido
+    FROM
+        (
+            SELECT
+                funcionario.nombre       AS nombre,
+                funcionario.apellidos    AS apellidos,
+                COUNT(libro.isbn)
+            FROM
+                     revision
+                JOIN funcionario ON revision.idfuncionario = funcionario.idfuncionario
+                JOIN libro ON revision.isbn = libro.isbn
+            GROUP BY
+                funcionario.idfuncionario,
+                funcionario.nombre,
+                funcionario.apellidos
+            ORDER BY
+                COUNT(libro.isbn) DESC
+        )
+    WHERE
+        ROWNUM <= 1;
+
+    IF v_nombre IS NULL THEN
+        RAISE no_data_found;
+    ELSE
+        dbms_output.put_line('NOMBRES : ' || v_nombre);
+        dbms_output.put_line('APELLIDOS : ' || v_apellido);
+    END IF;
+
+EXCEPTION
+    WHEN no_data_found THEN
+        dbms_output.put_line('NO EXISTEN REGISTROS');
+END;
+
+--bloque anonimo 
+SET SERVEROUTPUT ON;
+
+SET VERIFY OFF;
+
+BEGIN
+    funcionariomayorrevisiones;
+END;
+
+------------------------------------------------------------------------------------------------------------------------
+/* tercer punto */
+------------------------------------------------------------------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE revisionlibrosfuncionario (
+    id_funcionario IN funcionario.idfuncionario%TYPE
+) IS
+
+--Variables
+    v_nomfunc        funcionario.nombre%TYPE;
+    v_apellfunc      funcionario.nombre%TYPE;
+    TYPE resglibro IS RECORD (
+        v_isbn         libro.isbn%TYPE,
+        v_ratinglibro  revision.rating%TYPE,
+        v_titulolibro  libro.titulo%TYPE
+    );
+    TYPE regautor IS RECORD (
+        v_nombreautor    autor.nombre%TYPE,
+        v_apellidoautor  autor.apellidos%TYPE
+    );
+
+--Tabla tipo registro libro
+
+    TYPE tablereglibro IS
+        TABLE OF resglibro;
+
+--Tabla tipo registro autor
+    TYPE tableregautor IS
+        TABLE OF regautor;
+
+--Variable tipo tabla
+
+    v_tblreglibro    tablereglibro;
+    v_tblregautor    tableregautor;
+    v_numrevisiones  NUMBER := 0;
+    contador         NUMBER := 0;
+BEGIN
+    SELECT
+        COUNT(*)
+    INTO contador
+    FROM
+        funcionario
+    WHERE
+        funcionario.idfuncionario = id_funcionario;
+
+    IF contador = 0 THEN
+        RAISE no_data_found;
+    END IF;
+
+--titulos del libro
+    SELECT
+        autor.nombre,
+        autor.apellidos
+    BULK COLLECT
+    INTO v_tblregautor
+    FROM
+             autor
+        JOIN autor_libro ON autor.idautor = autor_libro.idautor
+        JOIN libro ON libro.isbn = autor_libro.isbn
+        JOIN revision ON revision.isbn = autor_libro.isbn
+        JOIN funcionario ON funcionario.idfuncionario = revision.idfuncionario
+                            AND funcionario.idfuncionario = id_funcionario;
+
+--libros revsiados por funcionario
+    SELECT
+        revision.isbn,
+        revision.rating,
+        libro.titulo
+    BULK COLLECT
+    INTO v_tblreglibro
+    FROM
+             revision
+        JOIN funcionario ON revision.idfuncionario = funcionario.idfuncionario
+        JOIN libro ON revision.isbn = libro.isbn
+                      AND funcionario.idfuncionario = id_funcionario
+    GROUP BY
+        funcionario.idfuncionario,
+        revision.isbn,
+        revision.rating,
+        libro.titulo; 
+
+
+
+
+
+--Datos del funcionario
+
+    dbms_output.put_line('DATOS FUNCIONARIO:');
+    SELECT
+        funcionario.nombre,
+        funcionario.apellidos
+    INTO
+        v_nomfunc,
+        v_apellfunc
+    FROM
+        funcionario
+    WHERE
+        funcionario.idfuncionario = id_funcionario;
+
+    dbms_output.put_line('Nombres:'
+                         || ' '
+                         || v_nomfunc
+                         || ' '
+                         || 'Apellidos:'
+                         || ' '
+                         || v_apellfunc);
+ 
+--Recorrer la tabla
+
+
+
+    FOR i IN 1..v_tblreglibro.count LOOP
+        dbms_output.put_line('DATOS LIBRO:'
+                             || '['
+                             || i
+                             || ']');
+        dbms_output.put_line('ISBN:'
+                             || ' '
+                             || v_tblreglibro(i).v_isbn
+                             || ' '
+                             || 'RATING:'
+                             || ' '
+                             || v_tblreglibro(i).v_ratinglibro
+                             || ' '
+                             || 'Título'
+                             || ' '
+                             || v_tblreglibro(i).v_titulolibro);
+
+        dbms_output.put_line('AUTORES DEL LIBRO:'
+                             || '['
+                             || i
+                             || ']');
+        dbms_output.put_line('Nombre:'
+                             || ' '
+                             || v_tblregautor(i).v_nombreautor
+                             || ' '
+                             || 'Apellidos:'
+                             || ' '
+                             || v_tblregautor(i).v_apellidoautor);
+
+    END LOOP;
+
+    dbms_output.put_line('REVISIONES:');
+    v_numrevisiones := infomerevisiones(id_funcionario);
+    dbms_output.put_line('NÚMERO REVISIONES:'
+                         || ''
+                         || v_numrevisiones);
+    IF v_numrevisiones <= 3 THEN
+        dbms_output.put_line('Informar al funcionario que agilice su proceso de revisión de los libros, con el fin de poder asignarles el Rating');
+    END IF;
+    IF v_numrevisiones >= 6 THEN
+        dbms_output.put_line('Reportar a pagaduría que al funcionario se le debe dar un Bono del 10% por su excelente labor');
+    END IF;
+EXCEPTION
+    WHEN no_data_found THEN
+        dbms_output.put_line('NO EXISTE EL FUNCIONARIO CON ID:'
+                             || ' '
+                             || id_funcionario);
+END;
+
+
+--BLOQUE ANÓNIMO
+DECLARE BEGIN
+    revisionlibrosfuncionario(34323200);
+END;

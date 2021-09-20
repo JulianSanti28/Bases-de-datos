@@ -1,0 +1,109 @@
+--CURSORES
+1.
+
+SET SERVEROUTPUT ON;
+
+DECLARE
+
+--Definir el cursor
+CURSOR estudiantesCursor IS 
+SELECT codigo, nombres, apellidos FROM estudiante
+WHERE idprograma = 'pis';
+
+--Definir variables
+
+v_codEst estudiante.codigo%TYPE;
+v_nomEst estudiante.nombres%TYPE;
+v_apeEst estudiante.apellidos%TYPE;
+
+
+BEGIN
+
+--Abrir el cursor
+
+OPEN estudiantesCursor;
+
+FETCH estudiantesCursor INTO v_codEst, v_nomEst, v_apeEst;
+
+--Recorrer el cursor
+
+WHILE estudiantesCursor%FOUND LOOP
+dbms_output.put_line('Código:' || ' ' || v_codEst || 'Nombre:' || ' ' || v_nomest || ' ' || 'Apellidos:' || ' ' || v_apeEst);
+FETCH estudiantesCursor INTO v_codEst, v_nomEst, v_apeEst;
+END LOOP;
+
+CLOSE estudiantesCursor;
+
+END;
+
+2.
+
+SET SERVEROUTPUT ON 
+DECLARE 
+CURSOR estudiantes_CursorV2 IS
+ select codigo, nombres, apellidos from estudiante
+ where IDPROGRAMA='&IDpPrograma';
+ --variables
+ v_codEst Estudiante.codigo%type;
+ v_nomEst Estudiante.nombres%type;
+ v_apeEst Estudiante.apellidos%type;
+ 
+ BEGIN
+ OPEN estudiantes_CursorV2;
+ --obtenemos un registro
+ FETCH estudiantes_CursorV2 INTO v_codEst, v_nomEst, v_apeEst;
+--verificar qu el cursor no este vacio
+IF estudiantes_CursorV2%NOTFOUND THEN
+dbms_output.put_line('El programa no existe o el id no es valido');
+ELSE
+--recorrer el cursor y mostrar los valores
+ LOOP
+  FETCH estudiantes_CursorV2 INTO v_codEst, v_nomEst, v_apeEst;
+  --mostramos valores
+  dbms_output.put_line('Codigo: '||v_codEst||' Nombre: '||v_nomEst||' Apellidos: '||v_apeEst);
+  EXIT WHEN estudiantes_CursorV2%NOTFOUND; --ultimo registro
+ END LOOP;
+END IF;
+dbms_output.put_line('Numero de estudiantes recuperados: '|| estudiantes_CursorV2%rowcount );
+CLOSE estudiantes_CursorV2;
+END;
+
+
+3.
+
+Consulta de Masso:(    --select a.nombre as nomAsg, a.modalidad, p.nombre as nomProg, pa.anio
+    from asignatura a, programa p, profesorAsignatura pa
+    where p.idprograma = a.idprograma and
+           a.idasignatura= pa.idasignatura and
+          pa.identificacion=cc;)
+
+
+--Solución mejorada
+
+CREATE OR REPLACE NONEDITIONABLE PROCEDURE proc_asgprofesor (
+    ident IN NUMBER
+) AS
+--definimos 
+    CURSOR asignaturasprofesor_cursor (
+        cc NUMBER
+    ) IS
+    SELECT
+        asignatura.nombre          AS nombre,
+        asignatura.modalidad       AS modalidad,
+        programa.nombre            AS programa,
+        profesorasignatura.anio    AS anio
+    FROM
+             profesor
+        JOIN profesorasignatura ON profesor.identificacion = profesorasignatura.identificacion
+        JOIN asignatura ON asignatura.idasignatura = profesorasignatura.idasignatura
+        JOIN programa ON asignatura.idprograma = programa.idprograma
+                         AND profesorasignatura.identificacion = cc;
+
+BEGIN
+    FOR asigprofesor_record IN asignaturasprofesor_cursor(ident) LOOP
+        dbms_output.put_line('Asignatura: ' || asigprofesor_record.nombre);
+        dbms_output.put_line('Modalidad: ' || asigprofesor_record.modalidad);
+        dbms_output.put_line('Programa: ' || asigprofesor_record.programa);
+        dbms_output.put_line('Anio: ' || asigprofesor_record.anio);
+    END LOOP;
+END;

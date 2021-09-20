@@ -1,0 +1,173 @@
+CREATE OR REPLACE PROCEDURE asigest_procedimiento (
+    p_ida IN programa.idprograma%TYPE
+) IS
+    --declaracion primer cursor 
+    CURSOR asignaturasprograma_cursor (
+        v_id programa.idprograma%TYPE
+    ) IS
+    SELECT
+        asignatura.nombre,
+        asignatura.idasignatura
+    FROM
+        asignatura
+    WHERE
+        asignatura.idprograma = v_id;
+
+    reg_asig  asignatura%rowtype;
+    
+    --cursor 2
+    CURSOR listadoestudiantes_cursor (
+        p_idasignatura asignatura.idasignatura%TYPE
+    ) IS
+    SELECT
+        estudiante.nombres,
+        estudiante.apellidos,
+        nota.nota1,
+        nota.nota2,
+        nota.nota3
+    FROM
+        estudiante
+        LEFT JOIN nota ON nota.codigo = estudiante.codigo
+    WHERE
+        nota.idasignatura = p_idasignatura;
+    --registro para recorrer cursor 
+    TYPE reg_estudiante IS RECORD (
+        nombre    estudiante.nombres%TYPE,
+        apellido  estudiante.apellidos%TYPE,
+        not1      nota.nota1%TYPE,
+        not2      nota.nota2%TYPE,
+        not3      nota.nota3%TYPE
+    );
+    v_cont    NUMBER; --contador verificar si existe el programa
+BEGIN
+    
+    SELECT
+        COUNT(*)
+    INTO v_cont
+    FROM
+        programa
+    WHERE
+        programa.idprograma = p_ida;
+    -- verificamos que el programa que lleg acomo parametro exista 
+    IF v_cont = 0 THEN
+        raise_application_error('-20001', 'El programa con id -'
+                                          || p_ida
+                                          || '-  No existe');
+    END IF;
+    
+    --recorremos los cursores con 1 for anidado 
+    FOR reg_asig IN asignaturasprograma_cursor(p_ida) LOOP
+        dbms_output.put_line('Materia :  '
+                             || reg_asig.nombre
+                             || ' | '
+                             || ' Codigo :'
+                             || reg_asig.idasignatura);
+
+        dbms_output.put_line(' ');
+        FOR reg_estudiante IN listadoestudiantes_cursor(reg_asig.idasignatura) LOOP
+            dbms_output.put_line('estudiante  '
+                                 || listadoestudiantes_cursor%rowcount
+                                 || ' ->  '
+                                 || ' Nombre : '
+                                 || reg_estudiante.nombres
+                                 || ' '
+                                 || reg_estudiante.apellidos
+                                 || ' -> '
+                                 || reg_estudiante.nota1
+                                 || ' | '
+                                 || reg_estudiante.nota2
+                                 || ' |  '
+                                 || reg_estudiante.nota3);
+        END LOOP;
+
+        dbms_output.put_line(' ');
+        dbms_output.put_line(' ');
+    END LOOP;
+
+END;
+------------------- 
+llamado
+------------------
+
+SET SERVEROUTPUT ON;
+
+SET VERIFY OFF;
+
+ACCEPT cod CHAR PROMPT 'Introduzca el ID del programa :';
+
+DECLARE
+    codigo programa.idprograma%TYPE := '&cod';
+BEGIN
+    asigest_procedimiento(codigo);
+END;
+
+
+------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE premiarEst_Procedimiento(idAsig asignatura.idasignatura%TYPE) 
+
+AS
+
+--Cursor
+CURSOR estudiantesAsignatura_Cursor IS
+SELECT asignatura.idasignatura as idasig, estudiante.codigo AS codigo, estudiante.nombres as nombre, estudiante.apellidos as apellido, nota1, nota2, nota3
+FROM nota JOIN estudiante ON nota.codigo = estudiante.codigo JOIN asignatura ON nota.idasignatura = asignatura.idasignatura;
+
+
+v_nFinal nota.nota1%TYPE := 0;
+v_nombreEst estudiante.nombres%TYPE;
+v_apelEst estudiante.apellidos%TYPE;
+
+--Variables
+
+v_nota1a nota.nota1%TYPE;
+v_nota2a nota.nota1%TYPE;
+v_nota3a nota.nota1%TYPE;
+v_notafa nota.nota1%TYPE;
+
+--Variable RECORD
+v_reg_est estudiantesAsignatura_Cursor%ROWTYPE;
+BEGIN
+--LOOP
+
+
+OPEN estudiantesAsignatura_Cursor;
+LOOP
+FETCH estudiantesAsignatura_Cursor INTO v_reg_est;
+EXIT WHEN estudiantesAsignatura_Cursor%NOTFOUND;
+
+IF v_reg_est.idasig = idAsig THEN
+v_nFinal := notaFinal(v_reg_est.codigo, idAsig);
+
+IF v_nFinal > 4.5 THEN
+
+dbms_output.put_line('PRIMERA INFORMACIÓN');
+dbms_output.put_line('Nombres: '|| ' ' || v_reg_est.nombre ||' ' ||' Apellidos: ' ||' ' ||v_reg_est.apellido ||
+' ' || 'N1:' || v_reg_est.nota1 || ' ' || 'N2:' || v_reg_est.nota2 || ' ' || 'N3:'|| v_reg_est.nota3
+|| ' ' || 'NotaF:' ||v_nFinal);
+
+UPDATE nota SET nota1 = 5 WHERE codigo =  v_reg_est.codigo AND idasignatura = v_reg_est.idasig;
+UPDATE nota SET nota2 = 5 WHERE codigo = v_reg_est.codigo AND idasignatura = v_reg_est.idasig;
+UPDATE nota SET nota3 = 5 WHERE codigo =  v_reg_est.codigo AND idasignatura = v_reg_est.idasig;
+
+
+SELECT nota1, nota2, nota3 INTO v_nota1a, v_nota2a, v_nota3a 
+FROM nota JOIN estudiante ON nota.codigo = estudiante.codigo JOIN asignatura ON nota.idasignatura = asignatura.idasignatura
+AND asignatura.idasignatura = idAsig AND estudiante.codigo = v_reg_est.codigo ;
+
+v_notafa := notaFinal(v_reg_est.codigo, idAsig);
+
+dbms_output.put_line('INFORMACIÓN ACTUALIZADA');
+dbms_output.put_line('Nombres: '|| ' ' || v_reg_est.nombre ||' ' ||' Apellidos: ' ||' ' ||v_reg_est.apellido ||
+' ' || 'N1:' || v_nota1a || ' ' || 'N2:' || v_nota2a || ' ' || 'N3:'|| v_nota3a
+|| ' ' || 'NotaF:' || v_notafa);
+END IF;
+END IF;
+END LOOP;
+CLOSE estudiantesAsignatura_Cursor;
+
+END;
+
+--Llamado
+
+execute premiarEst_Procedimiento('info3');

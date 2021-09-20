@@ -1,0 +1,139 @@
+CREATE OR REPLACE PROCEDURE infocategoria (
+CREATE OR REPLACE PROCEDURE infocategoria (
+    p_id    categoria.cat_id%TYPE,
+    p_suma  OUT NUMBER
+) IS
+--Registro
+    TYPE infogeneral IS RECORD (
+        v_nombrecat  categoria.cat_nombre%TYPE := 0,
+        v_cont       NUMBER
+    );
+
+--Variable tipo registro
+    v_infogeneral  infogeneral;
+--Creación de la excepción
+    categoria_no_existe EXCEPTION;
+--Variable cont y contAux para validaciones
+    cont           NUMBER;
+    contaux        NUMBER;
+BEGIN
+--Se valida si existe la categoria
+    SELECT
+        COUNT(*)
+    INTO cont
+    FROM
+        categoria
+    WHERE
+        cat_id = p_id;
+--Se valida si las peliculas tienen actores
+    SELECT
+        COUNT(*)
+    INTO contaux
+    FROM
+             pelicula
+        JOIN categoria ON pelicula.cat_id = categoria.cat_id
+                          AND categoria.cat_id = p_id
+    WHERE
+        pelicula.pel_id NOT IN (
+            SELECT
+                actua.pel_id
+            FROM
+                     pelicula
+                JOIN actua ON actua.pel_id = pelicula.pel_id
+                JOIN actor ON actua.act_id = actor.act_id
+        );
+
+    IF cont = 0 THEN
+        RAISE categoria_no_existe;
+    ELSE
+        IF contaux != 0 THEN
+    
+          --Guardando en el registro la cantidad de peliculas sin actores
+           v_infogeneral.v_cont := contAux;
+            SELECT
+                categoria.cat_nombre
+            INTO v_infogeneral.v_nombrecat
+            FROM
+                categoria
+            WHERE
+                categoria.cat_id = p_id;
+
+            dbms_output.put_line('Nombre categoria:' || v_infogeneral.v_nombrecat);
+            dbms_output.put_line('Peliculas sin actores:' || v_infogeneral.v_cont);
+            SELECT
+                SUM(actua.salario)
+            INTO p_suma
+            FROM
+                     pelicula
+                JOIN actua ON actua.pel_id = pelicula.pel_id
+                JOIN actor ON actua.act_id = actor.act_id
+                JOIN categoria ON categoria.cat_id = pelicula.cat_id
+            WHERE
+                pelicula.pel_id IN (
+                    SELECT
+                        actua.pel_id
+                    FROM
+                             pelicula
+                        JOIN actua ON actua.pel_id = pelicula.pel_id
+                        JOIN actor ON actua.act_id = actor.act_id
+                )
+                AND categoria.cat_id = p_id;
+
+        ELSE
+            
+            v_infogeneral.v_cont := 0;
+            SELECT
+                categoria.cat_nombre
+            INTO v_infogeneral.v_nombrecat
+            FROM
+                categoria
+            WHERE
+                categoria.cat_id = p_id;
+            
+            SELECT
+                SUM(actua.salario)
+            INTO p_suma
+            FROM
+                     pelicula
+                JOIN actua ON actua.pel_id = pelicula.pel_id
+                JOIN actor ON actua.act_id = actor.act_id
+                JOIN categoria ON categoria.cat_id = pelicula.cat_id
+            WHERE
+                pelicula.pel_id IN (
+                    SELECT
+                        actua.pel_id
+                    FROM
+                             pelicula
+                        JOIN actua ON actua.pel_id = pelicula.pel_id
+                        JOIN actor ON actua.act_id = actor.act_id
+                )
+                AND categoria.cat_id = p_id;
+
+            dbms_output.put_line('Nombre categoria:' || v_infogeneral.v_nombrecat);
+            dbms_output.put_line('Peliculas sin actores:' || v_infogeneral.v_cont);
+        END IF;
+    END IF;
+
+EXCEPTION
+    WHEN categoria_no_existe THEN
+        dbms_output.put_line('CATEGORÍA NO EXISTE');
+    WHEN no_data_found THEN
+        dbms_output.put_line('ERROR');
+END;
+
+
+
+
+--Llamado con bloque anónimo
+
+SET SERVEROUTPUT ON;
+
+DECLARE
+    v_sum NUMBER;
+BEGIN
+    infocategoria(&p_cod, v_sum);
+    IF v_sum IS NOT NULL THEN
+        dbms_output.put_line('Suma de salarios:' || v_sum);
+    END IF;
+
+END;

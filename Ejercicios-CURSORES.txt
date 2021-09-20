@@ -1,0 +1,89 @@
+CURSORES
+
+EJERCICIO 1.
+
+--Implemente un bloque anónimo que use cursores para imprimir el nombre de los profesores que pertenecen a facultades sin
+--programas.
+
+SET SERVEROUTPUT ON;
+
+DECLARE
+--Cursor de tipo docente
+CURSOR docente IS
+SELECT profesor.nombre AS Nombre FROM profesor JOIN facultad ON profesor.facultad_id = facultad.facultad_id
+AND facultad.facultad_id NOT IN (SELECT  facultad.facultad_id FROM facultad JOIN programa ON facultad.facultad_id = programa.facultad_id
+GROUP BY facultad.facultad_id);
+
+cont NUMBER :=1;
+
+
+BEGIN
+
+FOR regDocente IN docente LOOP
+
+dbms_output.put_line('Docente'|| cont||':' || regDocente.Nombre);
+cont := cont + 1;
+END LOOP;
+
+END;
+
+EJERCICIO 2:
+
+--Implemente un bloque anónimo que use cursores para imprimir código y nombre los estudiantes de la facultad cuyo id digita el
+--usuario.
+--Ej. Facultad: medicina
+--Estudiante 1: Código: 123 – Nombre: Juan
+--Estudiante 2: Código: 236 – Nombre: Sandra
+DECLARE
+    CURSOR estudiante IS
+ SELECT ESTUDIANTE.codigo AS Codigo, ESTUDIANTE.nombre as Nombre FROM ESTUDIANTE JOIN PROGRAMA
+ ON programa.programa_id = estudiante.programa_id JOIN FACULTAD ON
+ facultad.facultad_id = programa.facultad_id WHERE facultad.facultad_id = &f_id
+ GROUP BY ESTUDIANTE.codigo, ESTUDIANTE.nombre ;
+ 
+ cont NUMBER := 1;
+
+BEGIN
+
+FOR v_cursorEstudiente IN estudiante LOOP
+
+
+dbms_output.put_line('Estudiante'|| cont||':' || ' ' || 'Código:'|| v_cursorEstudiente.Codigo || ' '|| 'Nombre:' || ' ' ||v_cursorEstudiente.Nombre);
+
+cont := cont +1;
+
+END LOOP;
+
+END;
+
+EJERCICIO 3.
+
+create or replace NONEDITIONABLE PROCEDURE infoProgEstu(p_codFac facultad.facultad_id%TYPE) 
+IS
+
+CURSOR infoGeneral IS
+SELECT programa.nombre AS Programa, COUNT(estudiante.codigo) AS Cantidad FROM programa JOIN estudiante
+ON PROGRAMA.programa_id = ESTUDIANTE.programa_id JOIN facultad ON facultad.facultad_id = programa.facultad_id
+WHERE facultad.facultad_id =p_codFac 
+GROUP BY programa.nombre;
+
+cont NUMBER := 1;
+
+BEGIN
+
+FOR v_cursorInfoGeneral IN infoGeneral LOOP
+dbms_output.put_line('Programa'|| cont||':' || ' ' || v_cursorInfoGeneral.Programa || ' - '|| 'Cantidad de estudiantes:' || ' ' ||v_cursorInfoGeneral.Cantidad);
+cont := cont + 1;
+END LOOP;
+
+END;
+
+--Llamado
+
+
+SET SERVEROUTPUT ON;
+DECLARE
+
+BEGIN
+infoprogestu(&cod);
+END;

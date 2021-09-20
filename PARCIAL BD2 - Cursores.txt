@@ -1,0 +1,178 @@
+--Punto 1 parcial 2 BD - JULIAN MARTINEZ TRULLO - PAULA CONSTAIN
+CREATE OR REPLACE PROCEDURE actualizarPrecioStock_Proc (p_anioLibro libro.copyright_anio%TYPE)
+
+IS
+--Conteo de libros
+v_cont NUMBER := 0;
+
+--Cursor
+CURSOR librosAnio_Cursor IS 
+SELECT libro.isbn AS isbn, libro.titulo AS titulo, libro.categoria as categoria, libro.copyright_anio AS anioPub, libro.precio AS precio
+FROM LIBRO;
+
+--Variable RECORD
+v_regLibro librosAnio_Cursor%ROWTYPE;
+
+--Variables consulta actualziada
+v_Isbn libro.isbn%TYPE;
+v_Titulo libro.titulo%TYPE;
+v_Categoria libro.categoria%TYPE;
+v_Anio libro.copyright_anio%TYPE;
+v_Precio libro.precio%TYPE;
+
+BEGIN
+--Abriendo el cursor
+OPEN librosAnio_Cursor;
+LOOP
+FETCH librosAnio_Cursor INTO v_regLibro;
+EXIT WHEN librosAnio_Cursor%NOTFOUND;
+
+IF v_regLibro.anioPub = p_anioLibro THEN
+
+IF v_cont = 0 THEN
+ v_cont := v_cont +1;
+END IF;
+
+--Información sin actualziar
+dbms_output.put_line('PRIMERA INFORMACIÓN LIBRO' || '[' || v_cont || ']');
+dbms_output.put_line('ISBN LIBRO: '|| ' ' || v_regLibro.isbn||' ' ||' TÍTULO: ' ||' ' ||v_regLibro.titulo ||
+' ' || 'CATEGORÍA:' || v_regLibro.categoria || ' ' || 'Anio Publicacion:' || v_regLibro.anioPub || ' ' || 'PRECIO:'|| v_regLibro.precio);
+
+
+--Actualizar información
+UPDATE LIBRO SET PRECIO = (v_regLibro.precio * 1.20) WHERE libro.isbn = v_regLibro.isbn;
+
+--Consultar información actualziada
+SELECT libro.isbn , libro.titulo , libro.categoria , libro.copyright_anio , libro.precio
+INTO v_Isbn, v_Titulo, v_Categoria, v_Anio, v_Precio
+FROM LIBRO WHERE libro.isbn = v_regLibro.isbn;
+
+--Mostrar informacion actualizada
+dbms_output.put_line('INFORMACION ACTUALIZADA LIBRO' || '[' || v_cont || ']');
+dbms_output.put_line('ISBN LIBRO: '|| ' ' || v_Isbn||' ' ||' TÍTULO: ' ||' ' ||v_Titulo ||
+' ' || 'CATEGORÍA:' || v_Categoria || ' ' || 'Anio Publicacion:' || v_Anio|| ' ' || 'PRECIO:'|| v_Precio);
+
+v_cont := v_cont + 1;
+
+
+
+END IF;
+
+END LOOP;
+CLOSE librosAnio_Cursor;
+
+--Si no hay libros en ese anio
+IF v_cont = 0 THEN
+RAISE NO_DATA_FOUND;
+END IF;
+
+--Excepciones
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+DBMS_OUTPUT.PUT_LINE ('NO SE ACTUALZIARON DATOS, NO HAY LIBROS PUBLICADOS EN ESE ANIO');
+
+END;
+
+
+--Test
+SET SERVEROUTPUT ON;
+EXECUTE actualizarPrecioStock_Proc(2002); 
+
+
+
+--2 punto
+
+
+drop table logCambiosRev;
+CREATE  TABLE logCambiosRev(
+    log_idFun number,
+    log_isbn varchar2(30),
+    log_tipo varchar2(30),
+    log_fecha timestamp default Sysdate,
+    check(log_tipo IN('INSERT','UPDATE'))
+    
+);
+CREATE SEQUENCE seqLogCambiosRev start with 1 Increment by 1;
+
+CREATE OR REPLACE PACKAGE PQ_AUX IS 
+v_idFun funcionario.idfuncionario%type;
+v_idlibro libro.isbn%type;
+v_idfun_old funcionario.idfuncionario%type;
+v_idlibro_old libro.isbn%type;
+v_cont number;
+END;
+
+CREATE OR REPLACE TRIGGER cambiosPermitidosRev_TRG_1
+BEFORE 
+INSERT OR UPDATE ON REVISION 
+referencing new as new old as old 
+FOR EACH ROW 
+BEGIN 
+    pq_aux.v_idfun := :new.idfuncionario;
+    pq_aux.v_idlibro := :new.isbn;
+    pq_aux.v_idfun_old := :old.idfuncionario;
+    pq_aux.v_idlibro_old := :old.isbn;
+    
+END;
+
+CREATE OR REPLACE TRIGGER cambiosPermitidosRev_TRG_2 
+AFTER
+INSERT OR UPDATE ON REVISION 
+DECLARE 
+v_operacion varchar2(30):='';
+v_contFun number;
+v_contLibro number;
+v_fecha date ;
+BEGIN 
+--crear excepcion de jornada laboral 
+IF (TO_CHAR(SYSDATE,'DY') IN ('SAT','SUN')) OR (TO_CHAR(SYSDATE,'HH24:MI') NOT BETWEEN '08:00' AND '18:00') THEN
+    RAISE_APPLICATION_ERROR(-20500, 'Solo puede modificar la tabla REVISION en horas laborales');
+END IF;
+
+IF INSERTING THEN 
+    --contador de revisiones diarias por funcionario restringir a 1 diaria
+    v_operacion :='INSERT';
+    SELECT count(log_idfun) into v_contFun from logcambiosrev
+    where log_idfun =  pq_aux.v_idfun;
+    
+    --que solo se inserten hasta 3 revisiones por libro 
+    SELECT count(log_isbn) into v_contLibro from logcambiosrev 
+    where log_isbn =  pq_aux.v_idlibro;
+    
+    
+    --and trunc(log_fecha)=trunc(sysdate)
+    if v_contFun >=2   then 
+        RAISE_APPLICATION_ERROR(-20001, 'Solo se permite una revision diaria por funcionario en la tabla REVISION ');
+    end if;
+    
+    if v_contLibro >=4 then 
+        RAISE_APPLICATION_ERROR(-20002, 'Solo se permite  actualizar hasta 4 veces la info de un libro  en la tabla REVISION ');
+    end if;
+    INSERT INTO LOGCAMBIOSREV(log_idFun,log_isbn,log_tipo)VALUES(pq_aux.v_idfun,pq_aux.v_idlibro,v_operacion);
+END IF;
+
+IF UPDATING THEN 
+    --se asume que el isbn del libro no se puede modificar 
+    --contador de revisiones diarias por funcionario restringir a 1 diaria
+    v_operacion :='UPDATE';
+    SELECT count(log_idfun) into v_contFun from logcambiosrev 
+    where log_idfun =  pq_aux.v_idfun_old;
+    
+    --que solo se inserten hasta 3 revisiones por libro 
+    SELECT count(log_isbn) into v_contLibro from logcambiosrev  
+    where log_isbn =  pq_aux.v_idlibro_old;
+    
+    
+    
+    if v_contFun >=1 then 
+        RAISE_APPLICATION_ERROR(-20001, 'Solo se permite una revision diaria por funcionario en la tabla REVISION ');
+    end if;
+    
+    if v_contLibro >=3 then 
+        RAISE_APPLICATION_ERROR(-20002, 'Solo se permite  actualizar hasta 3 veces la info de un libro  en la tabla REVISION ');
+    end if;
+    INSERT INTO LOGCAMBIOSREV(log_idFun,log_isbn,log_tipo)VALUES(pq_aux.v_idfun_old,pq_aux.v_idlibro_old,v_operacion);
+    
+END IF;
+
+END;

@@ -1,0 +1,352 @@
+-------INICIO DE PAQUETE---------------
+CREATE OR REPLACE PACKAGE pk_lab12 AS 
+
+--PUNTO 2
+    FUNCTION promedio_estudiante (
+        p_cod estudiante.codigo%TYPE
+    ) RETURN nota.nota1%TYPE;
+
+--PUNTO 3
+    FUNCTION mejor_estudiante (
+        id_facultad facultad.idfacultad%TYPE
+    ) RETURN BOOLEAN;
+    
+
+
+---- PUNTO 4
+    TYPE asignatura_prom IS RECORD (
+        v_idestu    estudiante.codigo%TYPE,
+        v_nombre    estudiante.nombres%TYPE,
+        v_ape       estudiante.apellidos%TYPE,
+        v_promasig  nota.nota1%TYPE
+    );
+    r_infoprom asignatura_prom;
+    TYPE tbl_infoprom IS
+        TABLE OF r_infoprom%TYPE;
+    v_tabla_mejor tbl_infoprom;
+    FUNCTION mejor_promasig (
+        p_idp     programa.idprograma%TYPE,
+        p_idasig  asignatura.idasignatura%TYPE
+    ) RETURN v_tabla_mejor%TYPE;
+
+END; --FIN PACKAGE
+
+------------------------INICIO BODY--------------------------------------------------------
+CREATE OR REPLACE PACKAGE BODY pk_lab12 AS 
+---- PUNTO 4
+    FUNCTION mejor_promasig (
+        p_idp     programa.idprograma%TYPE,
+        p_idasig  asignatura.idasignatura%TYPE
+    ) RETURN v_tabla_mejor%TYPE IS
+        v_mejornota       nota.nota1%TYPE;
+        v_contprograma    NUMBER;
+        v_contasignatura  NUMBER;
+        v_contap          NUMBER;
+    BEGIN 
+--comprobaciones 
+        SELECT
+            COUNT(idprograma)
+        INTO v_contprograma
+        FROM
+            programa
+        WHERE
+            idprograma = p_idp;
+
+        SELECT
+            COUNT(idasignatura)
+        INTO v_contasignatura
+        FROM
+            asignatura
+        WHERE
+            idasignatura = p_idasig;
+
+        SELECT
+            COUNT(idasignatura)
+        INTO v_contap
+        FROM
+            asignatura
+        WHERE
+                idasignatura = p_idasig
+            AND idprograma = p_idp;
+
+        IF v_contprograma = 0 THEN
+            raise_application_error(-20001, 'El  programa no existe');
+            RETURN NULL;
+        END IF;
+
+        IF v_contasignatura = 0 THEN
+            raise_application_error(-20002, 'La asignatura no existe');
+            RETURN NULL;
+        END IF;
+
+        IF v_contap = 0 THEN
+            raise_application_error(-20003, 'La asignatura no es de ese programa');
+            RETURN NULL;
+        END IF;
+
+        SELECT
+            MAX(notafinal(codigo, p_idasig))
+        INTO v_mejornota
+        FROM
+            nota
+        WHERE
+            idasignatura = p_idasig;
+
+        SELECT
+            *
+        BULK COLLECT
+        INTO v_tabla_mejor
+        FROM
+            (
+                SELECT
+                    estudiante.codigo,
+                    estudiante.nombres,
+                    estudiante.apellidos,
+                    notafinal(estudiante.codigo, 'sis402') AS promedio
+                FROM
+                         nota
+                    JOIN estudiante ON nota.codigo = estudiante.codigo
+                WHERE
+                    idasignatura = p_idasig
+            )
+        WHERE
+            promedio = v_mejornota;
+
+        RETURN v_tabla_mejor;
+    END;
+
+
+----- PUNTO 3 
+-------------- BODY PUNTO 3 -------------------------------------
+--Funcion (Se recibe el código del estudiante)
+    FUNCTION mejor_estudiante (
+        id_facultad facultad.idfacultad%TYPE
+    ) RETURN BOOLEAN IS
+
+        v_cont     NUMBER := 0;
+       --------------- CURSORES ---------------------------------
+        CURSOR c_mprog IS
+        SELECT
+            nompr,
+            MAX(promedio) AS promedio
+        FROM
+            (
+                SELECT
+                    p.idprograma                                         AS nompr,
+                    AVG(notafinal(n.codigo, n.idasignatura))             AS promedio
+                FROM
+                    nota          n,
+                    estudiante    e,
+                    programa      p,
+                    asignatura    a,
+                    departamento  d,
+                    facultad      f
+                WHERE
+                        n.codigo = e.codigo
+                    AND n.idasignatura = a.idasignatura
+                    AND p.idprograma = e.idprograma
+                    AND d.idfacultad = f.idfacultad
+                    AND p.iddepartamento = d.iddepartamento
+                    AND d.idfacultad = id_facultad
+                GROUP BY
+                    p.idprograma,
+                    e.nombres,
+                    e.apellidos,
+                    d.nombre,
+                    f.idfacultad
+                ORDER BY
+                    promedio DESC
+            )
+        GROUP BY
+            nompr;
+            
+    --SU RESPECTIVA VARIABLE
+
+        v_regpro   c_mprog%rowtype;
+            
+    ----------CURSOR 2 ----------------------
+
+        CURSOR c_tmprog IS
+        SELECT
+            f.nombre                                             AS facnomb,
+            p.idprograma                                         AS pronom,
+            e.codigo                                             AS codest,
+            e.nombres                                            AS nomest,
+            e.apellidos                                          AS apeest,
+            AVG(notafinal(n.codigo, n.idasignatura))             AS promedio
+        FROM
+            nota          n,
+            estudiante    e,
+            programa      p,
+            asignatura    a,
+            departamento  d,
+            facultad      f
+        WHERE
+                n.codigo = e.codigo
+            AND n.idasignatura = a.idasignatura
+            AND p.idprograma = e.idprograma
+            AND d.idfacultad = f.idfacultad
+            AND p.iddepartamento = d.iddepartamento
+            AND f.idfacultad = id_facultad
+        GROUP BY
+            f.nombre,
+            p.idprograma,
+            e.codigo,
+            e.nombres,
+            e.apellidos,
+            f.idfacultad
+        ORDER BY
+            promedio DESC;
+          
+    --SU RESPECTIVA VARIABLE
+        v_regtpro  c_tmprog%rowtype;
+    --Variable auxiliar
+        i          NUMBER := 0;
+    BEGIN
+    --Validar existencia de la facultad
+        SELECT
+            COUNT(*)
+        INTO v_cont
+        FROM
+            facultad
+        WHERE
+            facultad.idfacultad = id_facultad;
+    /*Validar existencia de la facultad*/
+        IF v_cont = 0 THEN
+            RAISE no_data_found;
+        END IF;
+    --ABRIR EL PRIMER CURSOR (IDPROG -> MEJOR PROMEDIO DEL PROGRAMA)
+        OPEN c_mprog;
+        LOOP
+            FETCH c_mprog INTO v_regpro;
+            EXIT WHEN c_mprog%notfound;
+     
+         --ABRIR EL SEGUNDO CURSOR (FAC->PROG->CODEST->NOM, ETC)
+            OPEN c_tmprog;
+            LOOP
+                FETCH c_tmprog INTO v_regtpro;
+                EXIT WHEN c_tmprog%notfound;
+                IF (
+                    v_regpro.nompr = v_regtpro.pronom
+                    AND v_regpro.promedio = v_regtpro.promedio
+                ) THEN
+                    i := i + 1;
+                    dbms_output.put_line('['
+                                         || i
+                                         || ']'
+                                         || ' '
+                                         || 'FACULTAD:'
+                                         || v_regtpro.facnomb
+                                         || ' '
+                                         || 'ID_PROGRAMA:'
+                                         || v_regtpro.pronom
+                                         || ' '
+                                         || 'NOMBRE:'
+                                         || v_regtpro.nomest
+                                         || ' '
+                                         || 'APELLIDOS:'
+                                         || v_regtpro.apeest
+                                         || ' '
+                                         || 'PROMEDIO:'
+                                         || v_regtpro.promedio);
+
+                END IF;
+
+            END LOOP;
+
+            CLOSE c_tmprog;
+        END LOOP;
+
+        CLOSE c_mprog;
+        RETURN true;
+    EXCEPTION
+        WHEN no_data_found THEN
+            RETURN false;
+    END;
+
+--PUNTO 2 
+    FUNCTION promedio_estudiante (
+        p_cod estudiante.codigo%TYPE
+    ) RETURN nota.nota1%TYPE IS
+        v_promedio  nota.nota1%TYPE := -1;
+        v_cont      NUMBER;
+    BEGIN
+        SELECT
+            COUNT(codigo)
+        INTO v_cont
+        FROM
+            nota
+        WHERE
+            codigo = p_cod;
+
+        IF v_cont = 0 THEN
+            raise_application_error(-20004, 'El codigo de estudiante no se encuentra ');
+            RETURN NULL;
+        END IF;
+
+        SELECT
+            AVG(notafinal(codigo, idasignatura))
+        INTO v_promedio
+        FROM
+            nota
+        WHERE
+            codigo = p_cod;
+
+        RETURN v_promedio;
+    END;
+-- fin punto 2 
+END; 
+--------------------------- FIN BODY PACKAGE -----------------------------------------------
+----TEST PUNTO 2 ---------
+SET SERVEROUTPUT ON;
+
+DECLARE
+    p_cod estudiante.codigo%TYPE := 2017000;
+BEGIN
+    dbms_output.put_line('codigo estudiante '
+                         || p_cod
+                         || ' '
+                         || 'Promedio final '
+                         || pk_lab12.promedio_estudiante(p_cod));
+END;
+
+----------- TEST PUNTO 3 ---------------------------
+
+SET SERVEROUTPUT ON;
+
+DECLARE
+--Aquí va la facultad que desee (si no existe la función te informa)
+    v_fac  facultad.idfacultad%TYPE;
+    rta    BOOLEAN;
+BEGIN
+--Probar para la FIET
+    v_fac := 'fiet';
+    IF ( pk_lab12.mejor_estudiante(v_fac) = false ) THEN
+        dbms_output.put_line('LA FACULTAD NO EXISTE');
+    END IF;
+END;
+
+
+-----TEST PUNTO 4------ 
+
+SET SERVEROUTPUT ON;
+
+DECLARE
+    p_idp     programa.idprograma%TYPE := 'pis';
+    p_idasig  asignatura.idasignatura%TYPE := 'sis402';
+BEGIN
+    dbms_output.put_line(' CODIGO   '
+                         || 'NOMBRE   '
+                         || 'APELLIDO   '
+                         || 'PROMEDIO');
+    FOR i IN pk_lab12.mejor_promasig(p_idp, p_idasig).first..pk_lab12.mejor_promasig(p_idp, p_idasig).last LOOP
+        dbms_output.put_line(pk_lab12.mejor_promasig(p_idp, p_idasig)(i).v_idestu
+                             || ' '
+                             || pk_lab12.mejor_promasig(p_idp, p_idasig)(i).v_nombre
+                             || ' '
+                             || pk_lab12.mejor_promasig(p_idp, p_idasig)(i).v_ape
+                             || ' '
+                             || pk_lab12.mejor_promasig(p_idp, p_idasig)(i).v_promasig);
+    END LOOP;
+
+END;

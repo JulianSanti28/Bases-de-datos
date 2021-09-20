@@ -1,0 +1,280 @@
+Función 1.
+--Función
+
+create or replace NONEDITIONABLE FUNCTION notaFinal(p_codE IN estudiante.codigo%TYPE,
+p_codA IN asignatura.idasignatura%TYPE)
+
+return NUMBER
+
+--Declaraciones
+AS
+v_nF nota.nota1%TYPE := 0;
+v_n1 nota.nota1%TYPE;
+v_n2 nota.nota2%TYPE;
+v_n3 nota.nota3%TYPE;
+
+BEGIN
+SELECT nota.nota1, nota.nota2, nota.nota3 INTO v_n1, v_n2, v_n3
+FROM nota
+WHERE nota.codigo = p_codE AND nota.idasignatura=p_codA;
+
+
+--Cálculo
+v_nF := v_n1*0.35 + v_n2*0.35+v_n3*0.30;
+
+if v_nF is null then
+raise no_data_found;
+
+else
+
+return v_nF;
+end if;
+
+EXCEPTION 
+when no_data_found then
+return -1;
+END;
+
+
+--Llamado del método con variable host
+
+variable nFinal number;
+EXECUTE :nFinal := notaFinal(2017000, 'sis101');
+print nFinal
+
+--Llamado a través de un select
+
+SELECT notaFinal(2017000, 'sis101') as NotaFinal from dual;
+ --
+select estudiante.nombres, n.nota1, n.nota2, n.nota3, notafinal
+(2017000, 'sis101')
+FROM estudiante, nota n;
+
+2.
+
+CREATE OR REPLACE PROCEDURE consultaEstudiante(
+v_codE IN estudiante.codigo%TYPE,v_nombresE OUT estudiante.nombres%TYPE,
+v_apellidosE OUT estudiante.apellidos%TYPE)
+
+IS
+
+BEGIN
+
+SELECT estudiante.nombres, estudiante.apellidos INTO v_nombresE, v_apellidosE 
+FROM estudiante WHERE estudiante.codigo = v_codE;
+
+EXCEPTION 
+WHEN case_not_found THEN
+ DBMS_OUTPUT.PUT_LINE('El estudiante con código: '|| v_codE || 'NO EXISTE');
+
+END ;
+
+--Llamado
+
+--Por variables host
+
+variable v_nombres varchar2(100)
+variable v_apellidos varchar2(100)
+EXECUTE consultaestudiante(2017000,:v_nombres, :v_apellidos)
+print v_nombres v_apellidos
+
+--Llamado por bloque anónimo
+
+ACCEPT v_codE PROMPT 'DIGITE EL CÓDIGO DEL ESTUDIANTE' 
+
+DECLARE
+v_codEst estudiante.codigo%TYPE := &v_codE;
+v_nombres estudiante.nombres%TYPE;
+v_apellidos estudiante.apellidos%TYPE;
+
+
+
+BEGIN
+
+--Llamado al procedimiento
+
+consultaestudiante(v_codEst, v_nombres, v_apellidos);
+
+
+IF v_codEst IS NOT NULL THEN
+--Llamado al procedimiento
+
+
+DBMS_OUTPUT.PUT_LINE('Nombres'|| v_nombres);
+DBMS_OUTPUT.PUT_LINE('Apellidos'|| v_apellidos);
+
+END IF;
+
+
+END;
+
+3-
+
+CREATE OR REPLACE PROCEDURE informenotasestudiantetable (
+    codest IN estudiante.codigo%TYPE
+) IS
+
+    v_numasi   NUMBER := 0;
+    v_nf       nota.nota1%TYPE;
+--Registro de tipo notas-estudiante
+
+    TYPE registronotasest IS RECORD (
+        v_ida     asignatura.idasignatura%TYPE,
+        v_nonasi  asignatura.nombre%TYPE
+    );
+
+--Tabla de tipo del registro creado
+
+    TYPE tablanotasest IS
+        TABLE OF registronotasest;
+
+--Variable tipo tabla
+    v_tablapa  tablanotasest;
+BEGIN 
+
+--select count(nota.idasignatura) into v_numAsi from nota where nota.codigo = codEst; 
+    SELECT
+        COUNT(nota.idasignatura)
+    INTO v_numasi
+    FROM
+             nota
+        JOIN estudiante ON nota.codigo = estudiante.codigo
+                           AND nota.codigo = codest;
+
+    IF v_numasi != 0 THEN
+--BULK COLLECT RESERVA MEMORIA DE LA CANTIDAD DE FILAS QUE ME RETORNA LA CONSULTA PARA EL TEMA DE MEMORIA
+        SELECT
+            asignatura.idasignatura,
+            asignatura.nombre
+        BULK COLLECT
+        INTO v_tablapa
+        FROM
+                 asignatura
+            JOIN nota ON asignatura.idasignatura = nota.idasignatura
+                         AND nota.codigo = codest;
+
+        FOR i IN 1..v_numasi LOOP
+            v_nf := notafinal(codest, v_tablapa(i).v_ida);
+            dbms_output.put_line('[' || i || ']' || ' ' || 'Código asignatura:'
+                                 || ' ' || v_tablapa(i).v_ida
+                                 || ' '
+                                 || 'Nombre asignatura'
+                                 || ':'
+                                 || ' '
+                                 || v_tablapa(i).v_nonasi
+                                 || ' '
+                                 || 'Nota Final'
+                                 || ' '
+                                 || v_nf);
+
+        END LOOP;
+
+    ELSE
+        RAISE no_data_found;
+    END IF;
+
+EXCEPTION
+    WHEN no_data_found THEN
+        dbms_output.put_line('No existe resgistro para estudiante: ' || codest);
+END;
+
+
+
+SET SERVEROUTPUT ON;
+
+DECLARE BEGIN
+    informenotasestudiantetable(&cod);
+END;
+
+--BLOQUE ANÓNIMO
+
+SET SERVEROUTPUT ON;
+
+DECLARE BEGIN
+    informenotasestudiante(&cod);
+END;
+
+
+
+4-
+
+--Cree un procedimiento almacenado (llámelo informeNotasPrograma) que reciba como 
+--parámetro de entrada el id del programa y permita mostrar todos los estudiantes (código, 
+--nombres y apellidos) con las asignaturas vistas y sus notas definitivas (haga uso del 
+--procedimiento almacenado del punto 3). Ejecute el procedimiento en la consola
+
+CREATE OR REPLACE PROCEDURE informenotasprograma (
+    p_idp programa.idprograma%TYPE
+) IS
+--Registro para el estudiante
+    TYPE registroestudiante IS RECORD (
+        v_codest        estudiante.codigo%TYPE,
+        v_nombreest     estudiante.nombres%TYPE,
+        v_apellidosest  estudiante.apellidos%TYPE
+    );
+
+--Creando la tabla 
+    TYPE tableestudiante IS
+        TABLE OF registroestudiante;
+
+--Variable de tipo tabla estudiante
+
+    v_tableest  tableestudiante;
+
+--Variable para el nomnre del programa
+
+    v_nprog     programa.nombre%TYPE;
+BEGIN
+    SELECT
+        programa.nombre
+    INTO v_nprog
+    FROM
+        programa
+    WHERE
+        programa.idprograma = p_idp;
+
+    SELECT
+        estudiante.codigo,
+        estudiante.nombres,
+        estudiante.apellidos
+    BULK COLLECT
+    INTO v_tableest
+    FROM
+             estudiante
+        JOIN programa ON estudiante.idprograma = programa.idprograma
+                         AND programa.idprograma = p_idp;
+
+    dbms_output.put_line('Programa:'
+                         || ' '
+                         || v_nprog);
+    IF v_tableest.count = 0 THEN
+        RAISE no_data_found;
+    END IF;
+    FOR i IN 1..v_tableest.count LOOP
+        dbms_output.put_line('INFORMACIÓN DEL ESTUDIANTE:');
+        dbms_output.put_line('['
+                             || i
+                             || ']'
+                             || ' '
+                             || 'Código:'
+                             || ' '
+                             || v_tableest(i).v_codest
+                             || ' '
+                             || 'Nombres:'
+                             || ' '
+                             || v_tableest(i).v_nombreest
+                             || ' '
+                             || 'Apellidos:'
+                             || ' '
+                             || v_tableest(i).v_apellidosest);
+
+        dbms_output.put_line('ASIGNATURAS REGISTRADAS:');
+        informenotasestudiantetable(v_tableest(i).v_codest);
+    END LOOP;
+
+EXCEPTION
+    WHEN no_data_found THEN
+        dbms_output.put_line('No existe ningún programa con el código:'
+                             || ''
+                             || p_idp);
+END;

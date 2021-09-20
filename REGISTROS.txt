@@ -1,0 +1,59 @@
+1. /*
+Cree un bloque anónimo que pida los datos de un programa y luego inserte una fila en la tabla usando un
+registro. Si ya existe un programa con ese id lance la excepción ID_INVALIDO y muestre un mensaje.
+*/
+
+SET SERVEROUTPUT ON;
+SET VERIFY ON;
+
+ACCEPT codPr NUMBER PROMPT 'Introduzca el código del programa:';
+ACCEPT nombrePr CHAR PROMPT 'Introduzca nombre de programa :';
+ACCEPT codFac NUMBER PROMPT 'Introduzca el código de la facultad :';
+
+DECLARE 
+
+--Pidiendo los datos del registro
+codigoPrograma programa.programa_id%type := &codPr;
+nombrePrograma programa.nombre%TYPE:= '&nombrePr';
+codigoFacult programa.facultad_id%type := &codFac;
+
+cont NUMBER ;
+
+TYPE registro_agregar_programa is RECORD
+
+(
+
+id_programa programa.programa_id%TYPE,
+nombre_programa programa.nombre%TYPE,
+facultad_id programa.facultad_id%TYPE
+
+);
+
+--Variable tipo registro
+programaAgregar registro_agregar_programa;
+--Creación de la exception
+id_invalido EXCEPTION;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('cod '|| codigoPrograma);
+    DBMS_OUTPUT.PUT_LINE('nombre '|| nombreprograma);
+    DBMS_OUTPUT.PUT_LINE('cod '|| codigofacult);
+    
+    SELECT COUNT(*) into cont
+    from programa 
+    where programa_id = codigoPrograma;
+    DBMS_OUTPUT.PUT_LINE('contador '|| cont);
+    if cont !=0 then
+        RAISE id_invalido;
+    END IF;
+        programaAgregar.id_programa:= codigoPrograma;
+        programaAgregar.nombre_programa := nombrePrograma;
+        programaAgregar.facultad_id := codigoFacult;
+        INSERT INTO programa VALUES (programaAgregar.id_programa ,programaAgregar.nombre_programa , programaAgregar.facultad_id); 
+
+EXCEPTION
+
+    WHEN id_invalido THEN
+        DBMS_OUTPUT.PUT_LINE('codigo ya existe');
+END;
+
+2.

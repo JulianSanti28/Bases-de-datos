@@ -1,0 +1,148 @@
+--TALLER PAQUETES
+
+1. --PAQUETE
+
+create or replace NONEDITIONABLE PACKAGE Ejm1
+
+AS
+--Excepción
+SIN_PROFESORES EXCEPTION;
+--Variable para el salario
+v_salarioProfesor profesor.salario%TYPE;
+--Registro
+
+TYPE registroProgEst IS RECORD
+(
+v_nomProg programa.nombre%TYPE,
+v_numEst NUMBER
+);
+
+--Variable del tipo registro
+v_regProgEst registroProgEst;
+
+END;
+
+--Test del paquete
+
+CREATE OR REPLACE PROCEDURE TestPackageEjm1(id programa.facultad_id%TYPE)
+
+IS
+--v_regprogest Ejm1.registroProgEst;
+
+BEGIN
+
+SELECT PROGRAMA.nombre AS Programa, COUNT(estudiante.codigo) AS CantidadEstudiantes INTO Ejm1.v_regprogest FROM 
+PROGRAMA JOIN ESTUDIANTE ON programa.programa_id = estudiante.programa_id AND programa.programa_id = id
+GROUP BY programa.nombre;
+
+ dbms_output.put_line('Programa:'
+                             ||' '
+                             || Ejm1.v_regprogest.v_nomProg
+                             || ''
+                             || 'Cantidad Estudiantes' || ' ' ||Ejm1.v_regprogest.v_numEst) ;
+
+END;
+
+--Llamado
+
+SET SERVEROUTPUT ON;
+EXECUTE testpackageejm1(100);
+
+
+--SEGUNDO PAQUETE
+
+create or replace NONEDITIONABLE PACKAGE Ejm2
+IS
+--Tabla anidada
+TYPE tablaEstudiante IS TABLE OF estudiante%ROWTYPE;
+v_tableEst tablaEstudiante;
+
+--Registro para el cursor
+
+TYPE regEst IS RECORD (
+v_nomFac facultad.nombre%TYPE,
+v_numProg NUMBER
+);
+
+--Cursor
+
+CURSOR CursrorFac (N NUMBER) RETURN regEst;
+
+--Procedimiento
+
+PROCEDURE profeSinProgramas;
+
+END;
+
+
+--Body
+
+create or replace NONEDITIONABLE PACKAGE BODY Ejm2 AS
+
+
+CURSOR CursrorFac (N NUMBER) RETURN regEst IS
+
+SELECT nombre, cont
+    FROM
+        (
+            SELECT
+                facultad.nombre  AS nombre,
+                COUNT(programa.programa_id)       AS cont
+            FROM
+                 facultad JOIN programa ON programa.facultad_id = facultad.facultad_id
+            GROUP BY
+                facultad.nombre 
+            ORDER BY
+                COUNT(programa.programa_id) DESC
+                
+        )
+    WHERE
+        ROWNUM <= N;
+
+
+
+
+--Procedimiento
+PROCEDURE profeSinProgramas
+IS
+TYPE profesores IS TABLE OF profesor.nombre%TYPE;
+v_profesores profesores;
+BEGIN
+
+SELECT profesor.nombre BULK COLLECT INTO v_profesores FROM PROFESOR JOIN facultad ON profesor.facultad_id = facultad.facultad_id AND facultad.nombre NOT IN
+(SELECT facultad.nombre FROM facultad JOIN programa 
+ON programa.facultad_id = facultad.facultad_id GROUP BY facultad.nombre HAVING COUNT(programa.programa_id) > 0);
+
+FOR i IN 1..v_profesores.COUNT LOOP
+dbms_output.put_line('Docente:' || ' '|| v_profesores(i));
+END LOOP;
+END;
+
+END;
+
+--Bloque anónimo del cursor
+
+SET SERVEROUTPUT ON;
+DECLARE
+BEGIN
+FOR v_Cursor IN Ejm2.CursrorFac(&N) LOOP
+dbms_output.put_line('Facultad:' || ' '|| v_Cursor.v_nomFac || ' ' || 'Programas:' || ' ' || v_Cursor.v_numProg);
+END LOOP;
+END;
+
+
+--Bloque del procedimiento
+
+
+SET SERVEROUTPUT ON;
+DECLARE
+BEGIN
+ejm2.profesinprogramas;
+END;
+
+
+
+
+
+
+
